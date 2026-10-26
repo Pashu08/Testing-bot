@@ -1,95 +1,10 @@
+# cogs/hangman.py
 import discord
 from discord.ext import commands
-import json
-import os
 import random
 import asyncio
-
-DB_FILE = 'database.json'
-
-HANGMAN_PICS = [
-"""```
-  +---+
-  |   |
-      |
-      |
-      |
-      |
-=========
-```""",
-"""```
-  +---+
-  |   |
-  O   |
-      |
-      |
-      |
-=========
-```""",
-"""```
-  +---+
-  |   |
-  O   |
-  |   |
-      |
-      |
-=========
-```""",
-"""```
-  +---+
-  |   |
-  O   |
- /|   |
-      |
-      |
-=========
-```""",
-"""```
-  +---+
-  |   |
-  O   |
- /|\\  |
-      |
-      |
-=========
-```""",
-"""```
-  +---+
-  |   |
-  O   |
- /|\\  |
- /    |
-      |
-=========
-```""",
-"""```
-  +---+
-  |   |
-  O   |
- /|\\  |
- / \\  |
-      |
-=========
-```"""
-]
-
-def load_db():
-    if not os.path.exists(DB_FILE):
-        with open(DB_FILE, 'w') as f:
-            json.dump({"words": {"general": ["discord", "python", "termux"]}, "stats": {}}, f, indent=4)
-    try:
-        with open(DB_FILE, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"❌ Database Read Error: {e}")
-        return {"words": {}, "stats": {}}
-
-def save_db(data):
-    try:
-        with open(DB_FILE, 'w') as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        print(f"❌ Database Save Error: {e}")
+from utils.db import load_db
+from utils.art import HANGMAN_PICS
 
 class Hangman(commands.Cog):
     def __init__(self, bot):
@@ -97,54 +12,12 @@ class Hangman(commands.Cog):
         self.duel_players = {}
         self.duel_hosts = {}
 
-    @commands.command()
-    async def addword(self, ctx, category: str, *, word: str):
-        category = category.lower()
-        word = word.lower()
-        data = load_db()
-        if category not in data["words"]: data["words"][category] = []
-        if word in data["words"][category]:
-            return await ctx.send(f"⚠️ The word `{word}` is already in `{category}`!")
-        data["words"][category].append(word)
-        save_db(data)
-        await ctx.send(f"✅ Added `{word}` to `{category}`!")
-
-    @commands.command()
-    async def delword(self, ctx, category: str, *, word: str):
-        if not ctx.author.guild_permissions.administrator: return await ctx.send("❌ Only admins can delete words.")
-        category, word = category.lower(), word.lower()
-        data = load_db()
-        if category in data["words"] and word in data["words"][category]:
-            data["words"][category].remove(word)
-            if len(data["words"][category]) == 0: del data["words"][category]
-            save_db(data)
-            await ctx.send(f"🗑️ Deleted `{word}` from `{category}`.")
-        else:
-            await ctx.send(f"❌ Could not find `{word}` in `{category}`.")
-
-    @commands.command()
-    async def categories(self, ctx):
-        data = load_db()
-        cats = data["words"]
-        if not cats: return await ctx.send("No categories found! Use `.addword`")
-        msg = "📚 **Hangman Categories:**\n"
-        for cat, words in cats.items(): msg += f"- **{cat.capitalize()}**: {len(words)} words\n"
-        await ctx.send(msg)
-
-    @commands.command()
-    async def wordlist(self, ctx, category: str):
-        if not ctx.author.guild_permissions.administrator: return await ctx.send("❌ Admin only. No cheating!")
-        category = category.lower()
-        data = load_db()
-        if category not in data["words"]: return await ctx.send("❌ Category not found.")
-        await ctx.send(f"📂 **Admin Word List - {category.capitalize()}**:\n`{', '.join(data['words'][category])}`")
-
     @commands.command(name="help")
     async def custom_help(self, ctx):
         embed = discord.Embed(title="🎮 Hangman Bot Commands", color=discord.Color.blue())
         embed.add_field(name="🗡️ Play", value="`.hangman [category]` - Solo\n`.hangman duel` - Multiplayer Hot Seat", inline=False)
-        embed.add_field(name="📚 Word Bank", value="`.categories` - View lists\n`.addword [cat] [word]` - Add word", inline=False)
-        embed.add_field(name="🛡️ Admin/Host", value="`.delword [cat] [word]` - Delete word\n`.wordlist [cat]` - See words\n`.hkick @user` - Kick player from duel", inline=False)
+        embed.add_field(name="📚 Word Bank", value="`.categories`, `.addword [cat] [word]`", inline=False)
+        embed.add_field(name="🛡️ Admin/Host", value="`.delword`, `.wordlist`, `.hkick @user`", inline=False)
         embed.set_footer(text="Created by Pashu")
         await ctx.send(embed=embed)
 
@@ -155,7 +28,7 @@ class Hangman(commands.Cog):
         embed = discord.Embed(title="🎮 THE OFFICIAL HANGMAN SURVIVAL GUIDE", color=discord.Color.dark_red())
         embed.add_field(name="1. The Word Bank (Prep Phase)", value="You draft from the database. Type `.addword [cat] [word]` before playing.", inline=False)
         embed.add_field(name="2. Solo Training", value="Type `.hangman [category]`. 90 seconds per guess.", inline=False)
-        embed.add_field(name="3. THE DUEL: Hot Seat Mode", value="**Lobby**: `.hangman duel`. React ✋ to join, Host clicks ✅ to start.\n**Draft**: The bot DMs you to pick a word.\n**The Race**: Everyone gets a board. If you guess right, you keep going. If you guess wrong, the bot pauses your board and passes the turn to the next player!", inline=False)
+        embed.add_field(name="3. THE DUEL: Hot Seat Mode", value="**Lobby**: `.hangman duel`. React ✋ to join, Host clicks ✅ to start.\n**Draft**: The bot DMs you to pick a word.\n**The Race**: Everyone gets a board. If you guess right, you keep going. If you guess wrong, the bot pauses your board and passes the turn!", inline=False)
         await ctx.send(embed=embed)
 
     @commands.command()
@@ -183,9 +56,6 @@ class Hangman(commands.Cog):
                 else: d += "_ "
             return d
 
-        # ================================
-        # PHASE 3: MULTIPLAYER DUEL MODE
-        # ================================
         if category == "duel":
             if ctx.channel.id in self.duel_players: return await ctx.send("⚠️ A duel is already happening here!")
             
@@ -217,7 +87,6 @@ class Hangman(commands.Cog):
             self.duel_players[ctx.channel.id] = players
             await ctx.send(f"🚀 **DUEL STARTING!** {len(players)} players locked in.\n\n📱 **CHECK YOUR DMs!** You have 60 seconds to draft a word for someone else...")
             
-            # THE DRAFT
             async def draft_for_player(p):
                 if p not in self.duel_players.get(ctx.channel.id, []): return "kicked"
                 try:
@@ -281,21 +150,18 @@ class Hangman(commands.Cog):
                 
             await ctx.send("🎲 **THE DRAFT IS COMPLETE.** Words are secretly shuffled.\n\n🔥 **LET THE HOT SEATS BEGIN!** 🔥")
             
-            # --- ROTATING TURN LOGIC ---
             player_states = [{"player": p, "word": assigned_words[i], "guessed": [], "wrong": 0, "status": "playing"} for i, p in enumerate(final_players)]
             turn_idx = 0
             
             board_msg = await ctx.send("Setting up boards...")
             
             while any(s["status"] == "playing" for s in player_states):
-                # Find the next playing player
                 while player_states[turn_idx]["status"] != "playing":
                     turn_idx = (turn_idx + 1) % len(player_states)
                     
                 state = player_states[turn_idx]
                 p = state["player"]
                 
-                # Check if kicked mid-game
                 if p not in self.duel_players.get(ctx.channel.id, []):
                     await ctx.send(f"⏭️ **{p.display_name}** was kicked! Skipping their board.")
                     state["status"] = "kicked"
@@ -314,24 +180,21 @@ class Hangman(commands.Cog):
                     user_msg = await self.bot.wait_for('message', check=check_guess_duel, timeout=90.0)
                     guess = user_msg.content.lower()
                     
-                    # GHOST TYPIST: Delete the message instantly so chat stays clean
-                    try:
-                        await user_msg.delete()
+                    try: await user_msg.delete()
                     except: pass 
                     
                     if guess in state["guessed"]:
                         await ctx.send(f"⚠️ {p.mention}, you already guessed `{guess}`!", delete_after=3)
-                        continue # Keep turn
+                        continue 
                         
                     state["guessed"].append(guess)
                     turn_pass = False
                     
                     if guess not in state["word"]:
                         state["wrong"] += 1
-                        turn_pass = True # Wrong guess = lose turn
+                        turn_pass = True 
                         await ctx.send(f"❌ **Wrong!** {p.display_name} passes the controller!", delete_after=3)
                         
-                    # Check Win/Loss
                     display = get_display(state["word"], state["guessed"])
                     if "_" not in display:
                         state["status"] = "won"
@@ -345,11 +208,10 @@ class Hangman(commands.Cog):
 
                     if turn_pass:
                         turn_idx = (turn_idx + 1) % len(player_states)
-                        # Delete the old board and drop a new one so it stays at the bottom of the chat
                         if any(s["status"] == "playing" for s in player_states):
                             await board_msg.delete()
                             board_msg = await ctx.send("Swapping boards...")
-                            await asyncio.sleep(1) # Dramatic pause between turns
+                            await asyncio.sleep(1)
                             
                 except asyncio.TimeoutError:
                     state["status"] = "lost"
@@ -368,9 +230,6 @@ class Hangman(commands.Cog):
             self.duel_hosts.pop(ctx.channel.id, None)
             return await ctx.send("🏁 **THE DUEL HAS ENDED!** Great game everyone.")
 
-        # ================================
-        # PHASE 2: SOLO MODE 
-        # ================================
         if category not in data["words"] or not data["words"][category]:
             return await ctx.send(f"❌ Category `{category}` is empty or doesn't exist.")
 
@@ -385,7 +244,6 @@ class Hangman(commands.Cog):
                 user_msg = await self.bot.wait_for('message', check=check_solo, timeout=90.0)
                 guess = user_msg.content.lower()
                 
-                # GHOST TYPIST (Solo)
                 try: await user_msg.delete()
                 except: pass
 
