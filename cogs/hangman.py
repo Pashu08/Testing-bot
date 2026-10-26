@@ -3,13 +3,10 @@ from discord.ext import commands
 import json
 import os
 
-# This file will automatically be created in your main folder
 DB_FILE = 'database.json'
 
-# Helper function to load the database safely
 def load_db():
     if not os.path.exists(DB_FILE):
-        # Create a default database structure if it doesn't exist
         with open(DB_FILE, 'w') as f:
             json.dump({"words": {"general": ["discord", "python", "termux"]}, "stats": {}}, f, indent=4)
     try:
@@ -19,7 +16,6 @@ def load_db():
         print(f"❌ Database Read Error: {e}")
         return {"words": {}, "stats": {}}
 
-# Helper function to save changes to the database
 def save_db(data):
     try:
         with open(DB_FILE, 'w') as f:
@@ -35,10 +31,8 @@ class Hangman(commands.Cog):
     async def addword(self, ctx, category: str, *, word: str):
         category = category.lower()
         word = word.lower()
-        
         data = load_db()
         
-        # Create the category if it doesn't exist yet
         if category not in data["words"]:
             data["words"][category] = []
             
@@ -52,7 +46,6 @@ class Hangman(commands.Cog):
 
     @commands.command()
     async def delword(self, ctx, category: str, *, word: str):
-        # Prevent regular users from deleting words
         if not ctx.author.guild_permissions.administrator:
             await ctx.send("❌ Only server admins can delete words.")
             return
@@ -63,8 +56,6 @@ class Hangman(commands.Cog):
         
         if category in data["words"] and word in data["words"][category]:
             data["words"][category].remove(word)
-            
-            # Clean up: If category is now empty, delete the category entirely
             if len(data["words"][category]) == 0:
                 del data["words"][category]
                 
@@ -88,6 +79,33 @@ class Hangman(commands.Cog):
             
         await ctx.send(msg)
 
-# This setup function is required at the bottom of every Cog file
+    @commands.command()
+    async def wordlist(self, ctx, category: str):
+        if not ctx.author.guild_permissions.administrator:
+            await ctx.send("❌ Only server admins can view the word list to prevent cheating!")
+            return
+
+        category = category.lower()
+        data = load_db()
+        
+        if category not in data["words"] or not data["words"][category]:
+            await ctx.send(f"❌ The category `{category}` is empty or doesn't exist.")
+            return
+            
+        words = data["words"][category]
+        word_string = ", ".join(words)
+        await ctx.send(f"📂 **Admin Word List - {category.capitalize()}**:\n`{word_string}`")
+
+    @commands.command(name="help")
+    async def custom_help(self, ctx):
+        embed = discord.Embed(title="🎮 Hangman Bot Commands", color=discord.Color.blue())
+        
+        embed.add_field(name="🗡️ Play", value="`.hangman [category]` - Play solo\n`.hangman duel` - Start a multiplayer Hot Seat game", inline=False)
+        embed.add_field(name="📚 Word Bank", value="`.categories` - View all available categories\n`.addword [category] [word]` - Add a new word", inline=False)
+        embed.add_field(name="🛡️ Admin Only", value="`.delword [cat] [word]` - Delete a word\n`.wordlist [cat]` - Reveal all words in a category\n`.hkick @user` - Kick a player from a duel", inline=False)
+        
+        embed.set_footer(text="Created by Pashu")
+        await ctx.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(Hangman(bot))
