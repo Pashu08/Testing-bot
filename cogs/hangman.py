@@ -63,9 +63,6 @@ class Hangman(commands.Cog):
                 else: d += "_ "
             return d
 
-        # ==========================================
-        # MULTIPLAYER DRAFT FUNCTION
-        # ==========================================
         async def draft_for_player(p, drafting_for="someone else"):
             try:
                 dm = await p.create_dm()
@@ -182,7 +179,7 @@ class Hangman(commands.Cog):
                 await board_msg.edit(content=content)
                 
                 def check_team(m):
-                    return m.author == guesser and m.channel == ctx.channel and m.content.isalpha()
+                    return m.author == guesser and m.channel == ctx.channel and (m.content.isalpha() or " " in m.content)
                 
                 try:
                     user_msg = await self.bot.wait_for('message', check=check_team, timeout=90.0)
@@ -190,14 +187,14 @@ class Hangman(commands.Cog):
                     try: await user_msg.delete()
                     except: pass
                     
-                    if len(guess) > 1: # HERO GUESS
+                    if len(guess) > 1:
                         if guess == ts["word"]:
                             await ctx.send(f"🏆 **HERO GUESS SUCCESS!** {guesser.display_name} correctly guessed **{ts['word'].title()}**!\n**{ts['name']} WINS THE GAME!**")
                             game_over = True
                         else:
                             ts["wrong"] += 2
                             await ctx.send(f"🚨 **HERO GUESS FAILED!** `{guess}` was wrong. {ts['name']} takes **2 strikes**!", delete_after=5)
-                    else: # SINGLE LETTER
+                    else:
                         if guess in ts["guessed"]:
                             await ctx.send(f"⚠️ Your team already guessed `{guess}`!", delete_after=3)
                             continue 
@@ -230,7 +227,6 @@ class Hangman(commands.Cog):
                     board_msg = await ctx.send("Swapping sides...")
                     await asyncio.sleep(1)
             
-            # CLEANUP THE WAR ROOMS
             self.duel_players.pop(ctx.channel.id, None)
             self.duel_hosts.pop(ctx.channel.id, None)
             try: await board_msg.delete()
@@ -242,16 +238,145 @@ class Hangman(commands.Cog):
             return
 
         # ==========================================
-        # DUEL MODE (Unchanged, included for brevity)
+        # DUEL MODE
         # ==========================================
         if category == "duel":
-            return await ctx.send("⚠️ Due to length limits on Discord messages, I hid the Duel code here. Make sure you paste your old `category == 'duel'` block right here!")
+            if ctx.channel.id in self.duel_players: return await ctx.send("⚠️ A duel is already happening here!")
             
+            self.duel_hosts[ctx.channel.id] = ctx.author
+            lobby_msg = await ctx.send(f"⚔️ **HANGMAN DUEL LOBBY** ⚔️\n\nReact ✋ to join!\nHost (`{ctx.author.display_name}`) react ✅ to lock the lobby and start.")
+            await lobby_msg.add_reaction("✋")
+            await lobby_msg.add_reaction("✅")
+            
+            def check_start(reaction, user):
+                return user == ctx.author and str(reaction.emoji) == "✅" and reaction.message.id == lobby_msg.id
+                
+            try:
+                await self.bot.wait_for('reaction_add', timeout=300.0, check=check_start)
+            except asyncio.TimeoutError:
+                self.duel_hosts.pop(ctx.channel.id, None)
+                return await ctx.send("⏳ Lobby timed out.")
+                
+            lobby_msg = await ctx.channel.fetch_message(lobby_msg.id)
+            players = []
+            for reaction in lobby_msg.reactions:
+                if str(reaction.emoji) == "✋":
+                    async for user in reaction.users():
+                        if not user.bot and user not in players: players.append(user)
+                            
+            if len(players) < 2:
+                self.duel_hosts.pop(ctx.channel.id, None)
+                return await ctx.send("⚠️ Not enough players joined! Need at least 2.")
+                
+            self.duel_players[ctx.channel.id] = players
+            await ctx.send(f"🚀 **DUEL STARTING!** {len(players)} players locked in.\n\n📱 **CHECK YOUR DMs!** You have 60 seconds to draft a word for someone else...")
+            
+            tasks = [draft_for_player(p, "someone else") for p in players]
+            results = await asyncio.gather(*tasks)
+            
+            current_players = self.duel_players.get(ctx.channel.id, [])
+            if len(current_players) < 2:
+                self.duel_players.pop(ctx.channel.id, None)
+                self.duel_hosts.pop(ctx.channel.id, None)
+                return await ctx.send("⚠️ Too many players left or were kicked. Duel aborted.")
+                
+            active_results, final_players = [], []
+            for i, res in enumerate(results):
+                if res != "kicked" and players[i] in current_players:
+                    active_results.append(res)
+                    final_players.append(players[i])
+                    
+            assigned_words = [None] * len(final_players)
+            for i in range(len(final_players)):
+                assigned_words[i] = active_results[(i + 1) % len(final_players)]
+                
+            await ctx.send("🎲 **THE DRAFT IS COMPLETE.** Words are secretly shuffled.\n\n🔥 **LET THE HOT SEATS BEGIN!** 🔥")
+            
+            player_states = [{"player": p, "word": assigned_words[i], "guessed": [], "wrong": 0, "status": "playing"} for i, p in enumerate(final_players)]
+            turn_idx = 0
+            
+            board_msg = await ctx.send("Setting up boards...")
+            
+            while any(s["status"] == "playing" for s in player_states):
+                while player_states[turn_idx]["status"] != "playing":
+                    turn_idx = (turn_idx + 1) % len(player_states)
+                    
+                state = player_states[turn_idx]
+                p = state["player"]
+                
+                if p not in self.duel_players.get(ctx.channel.id, []):
+                    await ctx.send(f"⏭️ **{p.display_name}** was kicked! Skipping their board.")
+                    state["status"] = "kicked"
+                    turn_idx = (turn_idx + 1) % len(player_states)
+                    continue
+
+                display = get_display(state["word"], state["guessed"])
+                g_str = ", ".join(state["guessed"]) if state["guessed"] else "None"
+                
+                await board_msg.edit(content=f"🔥 **HOT SEAT: {p.mention}'s Turn!**\n{HANGMAN_PICS[state['wrong']]}\n`{display}`\n\n**Guessed:** {g_str}\n*Type a letter to guess!*")
+                
+                def check_guess_duel(m):
+                    return m.author == p and m.channel == ctx.channel and len(m.content) == 1 and m.content.isalpha()
+                
+                try:
+                    user_msg = await self.bot.wait_for('message', check=check_guess_duel, timeout=90.0)
+                    guess = user_msg.content.lower()
+                    
+                    try: await user_msg.delete()
+                    except: pass 
+                    
+                    if guess in state["guessed"]:
+                        await ctx.send(f"⚠️ {p.mention}, you already guessed `{guess}`!", delete_after=3)
+                        continue 
+                        
+                    state["guessed"].append(guess)
+                    turn_pass = False
+                    
+                    if guess not in state["word"]:
+                        state["wrong"] += 1
+                        turn_pass = True 
+                        await ctx.send(f"❌ **Wrong!** {p.display_name} passes the controller!", delete_after=3)
+                        
+                    display = get_display(state["word"], state["guessed"])
+                    if "_" not in display:
+                        state["status"] = "won"
+                        await ctx.send(f"🎉 **{p.display_name} SURVIVED THEIR BOARD!** The word was **{state['word'].title()}**.")
+                        turn_pass = True 
+                        
+                    elif state["wrong"] >= 6:
+                        state["status"] = "lost"
+                        await ctx.send(f"💀 **{p.display_name} HANGED!** Their word was **{state['word'].title()}**.")
+                        turn_pass = True 
+
+                    if turn_pass:
+                        turn_idx = (turn_idx + 1) % len(player_states)
+                        if any(s["status"] == "playing" for s in player_states):
+                            await board_msg.delete()
+                            board_msg = await ctx.send("Swapping boards...")
+                            await asyncio.sleep(1)
+                            
+                except asyncio.TimeoutError:
+                    state["status"] = "lost"
+                    await ctx.send(f"⏰ **TIME'S UP!** {p.display_name} AFK'd and died! Word: **{state['word'].title()}**.")
+                    turn_idx = (turn_idx + 1) % len(player_states)
+                    if any(s["status"] == "playing" for s in player_states):
+                        await board_msg.delete()
+                        board_msg = await ctx.send("Swapping boards...")
+                        await asyncio.sleep(1)
+
+            if board_msg:
+                try: await board_msg.delete()
+                except: pass
+
+            self.duel_players.pop(ctx.channel.id, None)
+            self.duel_hosts.pop(ctx.channel.id, None)
+            return await ctx.send("🏁 **THE DUEL HAS ENDED!** Great game everyone.")
+
         # ==========================================
-        # SOLO MODE (Unchanged)
+        # SOLO MODE
         # ==========================================
         if category not in server_words or not server_words[category]:
-            return await ctx.send(f"❌ Category `{category}` is empty or doesn't exist.")
+            return await ctx.send(f"❌ Category `{category}` is empty or doesn't exist in this server.")
 
         word = random.choice(server_words[category])
         guessed_letters, wrong_guesses = [], 0
@@ -263,8 +388,10 @@ class Hangman(commands.Cog):
             try:
                 user_msg = await self.bot.wait_for('message', check=check_solo, timeout=90.0)
                 guess = user_msg.content.lower()
+                
                 try: await user_msg.delete()
                 except: pass
+
                 if guess in guessed_letters:
                     await ctx.send(f"⚠️ You already guessed `{guess}`!", delete_after=3)
                     continue
@@ -272,11 +399,13 @@ class Hangman(commands.Cog):
                 if guess not in word: wrong_guesses += 1
                 
                 display = get_display(word, guessed_letters)
-                await board_msg.edit(content=f"🎮 **Solo Hangman** | **{category.capitalize()}**\n{HANGMAN_PICS[wrong_guesses]}\n`{display}`\n\n**Guessed:** {', '.join(guessed_letters)}")
-                if "_" not in display: return await ctx.send(f"🎉 **YOU SURVIVED!** Word: **{word.title()}**.")
+                g_str = ", ".join(guessed_letters) if guessed_letters else "None"
+                await board_msg.edit(content=f"🎮 **Solo Hangman** | **{category.capitalize()}**\n{HANGMAN_PICS[wrong_guesses]}\n`{display}`\n\n**Guessed:** {g_str}")
+                
+                if "_" not in display: return await ctx.send(f"🎉 **YOU SURVIVED!** The word was **{word.title()}**.")
             except asyncio.TimeoutError:
-                return await ctx.send(f"⏰ **TIME'S UP!** Word: **{word.title()}**.")
-        await ctx.send(f"💀 **GAME OVER!** Word: **{word.title()}**.")
+                return await ctx.send(f"⏰ **TIME'S UP!** You hang.\nThe word was **{word.title()}**.")
+        await ctx.send(f"💀 **GAME OVER!** You hang.\nThe word was **{word.title()}**.")
 
 async def setup(bot):
     await bot.add_cog(Hangman(bot))
