@@ -3,6 +3,8 @@ import discord
 from discord.ext import commands
 from utils.db import load_db, save_db
 
+OWNER_ID = 756012403291848804
+
 class Words(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -10,10 +12,9 @@ class Words(commands.Cog):
     @commands.command()
     async def addword(self, ctx, category: str, *, word: str):
         category, word = category.lower(), word.lower()
-        guild_id = str(ctx.guild.id) # Gets the Server's unique ID
+        guild_id = str(ctx.guild.id)
         data = load_db()
         
-        # If this server doesn't exist in the database yet, create its room
         if guild_id not in data:
             data[guild_id] = {"words": {}}
             
@@ -29,7 +30,7 @@ class Words(commands.Cog):
 
     @commands.command()
     async def delword(self, ctx, category: str, *, word: str):
-        if not ctx.author.guild_permissions.administrator: 
+        if not ctx.author.guild_permissions.administrator and ctx.author.id != OWNER_ID: 
             return await ctx.send("❌ Only admins can delete words.")
             
         category, word = category.lower(), word.lower()
@@ -61,7 +62,8 @@ class Words(commands.Cog):
 
     @commands.command()
     async def wordlist(self, ctx, category: str):
-        if not ctx.author.guild_permissions.administrator: return await ctx.send("❌ Admin only.")
+        if not ctx.author.guild_permissions.administrator and ctx.author.id != OWNER_ID: 
+            return await ctx.send("❌ Admin only.")
         
         category = category.lower()
         guild_id = str(ctx.guild.id)
