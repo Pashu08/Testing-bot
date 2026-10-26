@@ -107,5 +107,24 @@ class Hangman(commands.Cog):
         embed.set_footer(text="Created by Pashu")
         await ctx.send(embed=embed)
 
+    @commands.command(name="guide")
+    async def game_guide(self, ctx, game_name: str = None):
+        # If they don't specify a game, show them a list of available guides
+        if game_name is None or game_name.lower() != "hangman":
+            await ctx.send("📚 **Available Guides:**\n- `hangman`\n\nUsage: `.guide hangman` (More games coming soon!)")
+            return
+
+        # The actual Hangman Guide
+        embed = discord.Embed(title="🎮 THE OFFICIAL HANGMAN SURVIVAL GUIDE", color=discord.Color.dark_red())
+        
+        embed.add_field(name="1. The Word Bank (Prep Phase)", value="You CANNOT make up words during the game! You draft from the database, so you MUST add words *before* playing.\n- Type `.addword [category] [word]` to expand the lists.\n- Type `.categories` to see what is already available.", inline=False)
+        
+        embed.add_field(name="2. Solo Training", value="Type `.hangman [category]`. The bot pulls a random word from that saved category. You have 90 seconds per guess.", inline=False)
+        
+        embed.add_field(name="3. THE DUEL: Hot Seat Mode", value="**Lobby**: Type `.hangman duel`. React with ✋ to join, Host clicks ✅ to start.\n**Draft**: The bot DMs you to pick a category, then gives you 5 words *that were already saved in that category*. Pick the hardest one.\n**Hot Seat**: Words are secretly shuffled. Players take turns in the Hot Seat guessing their assigned word.", inline=False)
+        
+        embed.set_footer(text="Good luck. You're going to need it.")
+        await ctx.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(Hangman(bot))
