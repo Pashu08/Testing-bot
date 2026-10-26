@@ -46,7 +46,15 @@ class Hangman(commands.Cog):
     async def play_hangman(self, ctx, category: str = None):
         if not category: return await ctx.send("⚠️ Specify a category! Example: `.hangman general` or `.hangman duel`.")
         category = category.lower()
+        
+        guild_id = str(ctx.guild.id)
         data = load_db()
+        
+        # Make sure this server actually has words added before trying to play
+        if guild_id not in data or "words" not in data[guild_id] or not data[guild_id]["words"]:
+            return await ctx.send("❌ No words have been added in this server yet! Use `.addword` to create a category.")
+            
+        server_words = data[guild_id]["words"]
 
         def get_display(w, gl):
             d = ""
@@ -97,14 +105,14 @@ class Hangman(commands.Cog):
                         cat_msg = await self.bot.wait_for('message', check=check_msg, timeout=60.0)
                         cat = cat_msg.content.lower()
                     except asyncio.TimeoutError:
-                        cat = random.choice(list(data["words"].keys()))
+                        cat = random.choice(list(server_words.keys()))
                         await dm.send(f"⏳ Time's up! Auto-picked category: `{cat}`")
                         
-                    if cat not in data["words"] or not data["words"][cat]:
-                        cat = random.choice(list(data["words"].keys()))
+                    if cat not in server_words or not server_words[cat]:
+                        cat = random.choice(list(server_words.keys()))
                         await dm.send(f"⚠️ Invalid category! Auto-picked: `{cat}`")
                         
-                    cat_words = data["words"][cat]
+                    cat_words = server_words[cat]
                     sample_size = min(5, len(cat_words))
                     choices = random.sample(cat_words, sample_size)
                     
@@ -127,7 +135,7 @@ class Hangman(commands.Cog):
                     return chosen
                 except discord.Forbidden:
                     await ctx.send(f"⚠️ {p.mention}, your DMs are locked! Auto-picking a word for you.")
-                    return random.choice(data["words"][random.choice(list(data["words"].keys()))])
+                    return random.choice(server_words[random.choice(list(server_words.keys()))])
 
             tasks = [draft_for_player(p) for p in players]
             results = await asyncio.gather(*tasks)
@@ -230,10 +238,10 @@ class Hangman(commands.Cog):
             self.duel_hosts.pop(ctx.channel.id, None)
             return await ctx.send("🏁 **THE DUEL HAS ENDED!** Great game everyone.")
 
-        if category not in data["words"] or not data["words"][category]:
-            return await ctx.send(f"❌ Category `{category}` is empty or doesn't exist.")
+        if category not in server_words or not server_words[category]:
+            return await ctx.send(f"❌ Category `{category}` is empty or doesn't exist in this server.")
 
-        word = random.choice(data["words"][category])
+        word = random.choice(server_words[category])
         guessed_letters, wrong_guesses = [], 0
 
         board_msg = await ctx.send(f"🎮 **Solo Hangman** | **{category.capitalize()}**\n{HANGMAN_PICS[wrong_guesses]}\n`{get_display(word, guessed_letters)}`\n\n*Type a letter! (90s limit)*")
