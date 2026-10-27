@@ -394,4 +394,49 @@ class Hangman(commands.Cog):
                 except: pass
 
             self.duel_players.pop(ctx.channel.id, None)
-            self.duel_hosts.pop
+            self.duel_hosts.pop(ctx.channel.id, None)
+            return await ctx.send(embed=discord.Embed(title="🏁 DUEL OVER!", description="Great game everyone.", color=discord.Color.gold()))
+
+        # ==========================================
+        # SOLO MODE
+        # ==========================================
+        if category not in server_words or not server_words[category]:
+            return await ctx.send(embed=discord.Embed(title="❌ Error", description=f"Category `{category}` is empty or doesn't exist.", color=discord.Color.red()))
+
+        word = random.choice(server_words[category])
+        guessed_letters, wrong_guesses = [], 0
+
+        def check_solo(m): return m.author == ctx.author and m.channel == ctx.channel and len(m.content) == 1 and m.content.isalpha()
+        
+        solo_embed = discord.Embed(title=f"🎮 Solo Hangman | {category.capitalize()}", color=discord.Color.purple())
+        solo_embed.description = f"```text\n{HANGMAN_PICS[wrong_guesses]}\n```\n`{get_display(word, guessed_letters)}`\n\n*Type a letter! (90s limit)*"
+        board_msg = await ctx.send(embed=solo_embed)
+
+        while wrong_guesses < 6:
+            try:
+                user_msg = await self.bot.wait_for('message', check=check_solo, timeout=90.0)
+                guess = user_msg.content.lower()
+                try: await user_msg.delete()
+                except: pass
+
+                if guess in guessed_letters:
+                    await ctx.send(embed=discord.Embed(description=f"⚠️ You already guessed `{guess}`!", color=discord.Color.orange()), delete_after=3)
+                    continue
+                guessed_letters.append(guess)
+                if guess not in word: wrong_guesses += 1
+                
+                display = get_display(word, guessed_letters)
+                g_str = ", ".join(guessed_letters) if guessed_letters else "None"
+                
+                solo_embed.description = f"```text\n{HANGMAN_PICS[wrong_guesses]}\n```\n`{display}`\n\n**Guessed:** {g_str}"
+                await board_msg.edit(embed=solo_embed)
+                
+                if "_" not in display: 
+                    return await ctx.send(embed=discord.Embed(title="🎉 YOU SURVIVED!", description=f"The word was **{word.title()}**.", color=discord.Color.green()))
+            except asyncio.TimeoutError:
+                return await ctx.send(embed=discord.Embed(title="⏰ TIME'S UP!", description=f"You hang.\nThe word was **{word.title()}**.", color=discord.Color.red()))
+                
+        await ctx.send(embed=discord.Embed(title="💀 GAME OVER!", description=f"You hang.\nThe word was **{word.title()}**.", color=discord.Color.red()))
+
+async def setup(bot):
+    await bot.add_cog(Hangman(bot))
