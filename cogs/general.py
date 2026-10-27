@@ -1,6 +1,59 @@
 # cogs/general.py
 import discord
 from discord.ext import commands
+from utils.db import load_db, save_db
+
+OWNER_ID = 756012403291848804
+
+def init_guild(data, guild_id):
+    if guild_id not in data:
+        data[guild_id] = {"words": {}, "mods": []}
+    if "mods" not in data[guild_id]:
+        data[guild_id]["mods"] = []
+    if "words" not in data[guild_id]:
+        data[guild_id]["words"] = {}
+    return data
+
+class HelpDropdown(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Playing the Game", description="Learn how to play Solo, Duel, and Team.", emoji="🎮"),
+            discord.SelectOption(label="Word Management", description="Commands for adding and checking words.", emoji="📚"),
+            discord.SelectOption(label="Admin & Mods", description="How to manage games and bot admins.", emoji="🛡️")
+        ]
+        super().__init__(placeholder="Select a category to explore...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        selection = self.values[0]
+        
+        if selection == "Playing the Game":
+            embed = discord.Embed(title="🎮 Playing the Game", color=discord.Color.blue())
+            embed.add_field(name="`.hangman [category]`", value="Play a standard **Solo** game. You have 90 seconds per guess.", inline=False)
+            embed.add_field(name="`.hangman duel`", value="**Hot Seat Multiplayer**. The bot DMs everyone to draft words for each other. Miss a letter, and your turn passes!", inline=False)
+            embed.add_field(name="`.hangman team`", value="**Team vs Team**. The lobby splits into Red and Blue. Discuss in secret threads, but only the *Designated Guesser* can type the answer! Features 90s turns and high-risk **Hero Guesses**.", inline=False)
+            embed.set_footer(text="To see categories, type .categories")
+            
+        elif selection == "Word Management":
+            embed = discord.Embed(title="📚 Word Management", color=discord.Color.green())
+            embed.add_field(name="`.categories`", value="Shows all word categories in this server.", inline=False)
+            embed.add_field(name="`.addword [category] [word]`", value="Adds a single word to a category.", inline=False)
+            embed.add_field(name="`.addwords [category] [word1], [word2]`", value="Mass add words separated by commas.\n*Example:* `.addwords anime luffy, naruto, goku`", inline=False)
+            
+        elif selection == "Admin & Mods":
+            embed = discord.Embed(title="🛡️ Admin & Mods", color=discord.Color.red())
+            embed.add_field(name="`.delword [category] [word]`", value="Deletes a word. (Bot Mod only)", inline=False)
+            embed.add_field(name="`.wordlist [category]`", value="Shows the full list of words in a category. (Bot Mod only)", inline=False)
+            embed.add_field(name="`.hkick @user`", value="Kicks a player from an active lobby. (Host/Bot Mod only)", inline=False)
+            embed.add_field(name="`.addmod @user` / `.delmod @user`", value="Gives a user permission to delete words and kick players.", inline=False)
+            embed.add_field(name="`.modlist`", value="See who the current Bot Admins are.", inline=False)
+
+        # Updates the message with the new embed instantly
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+class HelpView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=120.0)
+        self.add_item(HelpDropdown())
 
 class General(commands.Cog):
     def __init__(self, bot):
@@ -8,22 +61,59 @@ class General(commands.Cog):
 
     @commands.command(name="help")
     async def custom_help(self, ctx):
-        embed = discord.Embed(title="🎮 Hangman Bot Commands", color=discord.Color.blue())
-        embed.add_field(name="🗡️ Play", value="`.hangman [category]` - Solo\n`.hangman duel` - Multiplayer Hot Seat\n`.hangman team` - Team vs. Team", inline=False)
-        embed.add_field(name="📚 Word Bank", value="`.categories`, `.addword [cat] [word]`", inline=False)
-        embed.add_field(name="🛡️ Admin/Host", value="`.delword`, `.wordlist`, `.hkick @user`", inline=False)
+        embed = discord.Embed(
+            title="✨ Hangman Bot Help Menu",
+            description="Welcome to the ultimate Hangman experience.\nSelect a category from the dropdown menu below to see the commands!",
+            color=discord.Color.dark_purple()
+        )
         embed.set_footer(text="Created by Pashu")
-        await ctx.send(embed=embed)
+        await ctx.send(embed=embed, view=HelpView())
 
-    @commands.command(name="guide")
-    async def game_guide(self, ctx, game_name: str = None):
-        if game_name is None or game_name.lower() != "hangman":
-            return await ctx.send("📚 **Available Guides:**\n- `hangman`\nUsage: `.guide hangman`")
-        embed = discord.Embed(title="🎮 THE OFFICIAL HANGMAN SURVIVAL GUIDE", color=discord.Color.dark_red())
-        embed.add_field(name="1. The Word Bank", value="Type `.addword [cat] [word]` to add words to your server's database.", inline=False)
-        embed.add_field(name="2. Solo & Duel", value="`.hangman [category]` to play alone.\n`.hangman duel` for Hot Seat free-for-all mode.", inline=False)
-        embed.add_field(name="3. TEAM VS TEAM", value="Type `.hangman team`.\nThe bot splits you into **Red 🍎** and **Blue 🫐** and makes secret Strategy Threads for you to talk in.", inline=False)
-        embed.add_field(name="4. Team Rules", value="**Designated Guesser**: You have 90s to talk in your thread, but ONLY the pinged player can type the guess in the main channel.\n**Hero Guess**: Type the FULL word to instantly win. But if you misspell it, your team takes 2 penalty strikes!", inline=False)
+    @commands.command()
+    async def addmod(self, ctx, member: discord.Member):
+        if not ctx.author.guild_permissions.administrator and ctx.author.id != OWNER_ID:
+            return await ctx.send(embed=discord.Embed(title="❌ Access Denied", description="Only Server Admins or the Bot Owner can add mods.", color=discord.Color.red()))
+            
+        guild_id = str(ctx.guild.id)
+        data = load_db()
+        data = init_guild(data, guild_id)
+        
+        if member.id in data[guild_id]["mods"]:
+            return await ctx.send(embed=discord.Embed(title="⚠️ Already Mod", description=f"{member.mention} is already a Bot Admin.", color=discord.Color.orange()))
+            
+        data[guild_id]["mods"].append(member.id)
+        save_db(data)
+        await ctx.send(embed=discord.Embed(title="🛡️ Mod Added", description=f"{member.mention} is now a Bot Admin! They can delete words and kick players.", color=discord.Color.green()))
+
+    @commands.command()
+    async def delmod(self, ctx, member: discord.Member):
+        if not ctx.author.guild_permissions.administrator and ctx.author.id != OWNER_ID:
+            return await ctx.send(embed=discord.Embed(title="❌ Access Denied", description="Only Server Admins or the Bot Owner can remove mods.", color=discord.Color.red()))
+            
+        guild_id = str(ctx.guild.id)
+        data = load_db()
+        data = init_guild(data, guild_id)
+        
+        if member.id not in data[guild_id]["mods"]:
+            return await ctx.send(embed=discord.Embed(title="⚠️ Not Found", description=f"{member.mention} is not in the Bot Admin list.", color=discord.Color.orange()))
+            
+        data[guild_id]["mods"].remove(member.id)
+        save_db(data)
+        await ctx.send(embed=discord.Embed(title="🗑️ Mod Removed", description=f"{member.mention} is no longer a Bot Admin.", color=discord.Color.red()))
+
+    @commands.command()
+    async def modlist(self, ctx):
+        guild_id = str(ctx.guild.id)
+        data = load_db()
+        data = init_guild(data, guild_id)
+        
+        mod_ids = data.get(guild_id, {}).get("mods", [])
+        if not mod_ids:
+            return await ctx.send(embed=discord.Embed(title="🛡️ Bot Admins", description="There are no custom Bot Admins in this server yet.", color=discord.Color.blue()))
+            
+        mod_mentions = [f"<@{m_id}>" for m_id in mod_ids]
+        embed = discord.Embed(title="🛡️ Current Bot Admins", description="\n".join(mod_mentions), color=discord.Color.gold())
+        embed.set_footer(text="Mods can use .delword, .wordlist, and .hkick")
         await ctx.send(embed=embed)
 
 async def setup(bot):
