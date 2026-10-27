@@ -54,7 +54,6 @@ class Words(commands.Cog):
         if category not in data[guild_id]["words"]: 
             data[guild_id]["words"][category] = []
 
-        # Split by comma and clean up spaces
         raw_words = [w.strip().lower() for w in words_string.split(",")]
         added, duplicates = [], []
 
@@ -95,6 +94,28 @@ class Words(commands.Cog):
             await ctx.send(embed=discord.Embed(title="🗑️ Word Deleted", description=f"Removed `{word}` from `{category}`.", color=discord.Color.green()))
         else:
             await ctx.send(embed=discord.Embed(title="❌ Error", description=f"Could not find `{word}` in `{category}`.", color=discord.Color.red()))
+
+    @commands.command()
+    async def rencat(self, ctx, old_name: str, new_name: str):
+        guild_id = str(ctx.guild.id)
+        data = load_db()
+        data = init_guild(data, guild_id)
+
+        if not is_bot_admin(ctx, data, guild_id): 
+            return await ctx.send(embed=discord.Embed(title="❌ Access Denied", description="Only Bot Admins can rename categories.", color=discord.Color.red()))
+        
+        old_name, new_name = old_name.lower(), new_name.lower()
+        
+        if old_name not in data[guild_id]["words"]:
+            return await ctx.send(embed=discord.Embed(title="❌ Error", description=f"Category `{old_name}` does not exist.", color=discord.Color.red()))
+            
+        if new_name in data[guild_id]["words"]:
+            return await ctx.send(embed=discord.Embed(title="⚠️ Error", description=f"Category `{new_name}` already exists! Choose a different name.", color=discord.Color.orange()))
+            
+        data[guild_id]["words"][new_name] = data[guild_id]["words"].pop(old_name)
+        save_db(data)
+        
+        await ctx.send(embed=discord.Embed(title="🔄 Category Renamed", description=f"Successfully renamed `{old_name}` to `{new_name}`.", color=discord.Color.green()))
 
     @commands.command()
     async def categories(self, ctx):
