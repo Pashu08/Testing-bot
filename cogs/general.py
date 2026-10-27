@@ -30,7 +30,7 @@ class HelpDropdown(discord.ui.Select):
             embed = discord.Embed(title="🎮 Playing the Game", color=discord.Color.blue())
             embed.add_field(name="`.hangman [category]`", value="Play a standard **Solo** game. You have 90 seconds per guess.", inline=False)
             embed.add_field(name="`.hangman duel`", value="**Hot Seat Multiplayer**. The bot DMs everyone to draft words for each other. Miss a letter, and your turn passes!", inline=False)
-            embed.add_field(name="`.hangman team`", value="**Team vs Team**. Discuss in secret threads, but only the *Designated Guesser* can type the answer!", inline=False)
+            embed.add_field(name="`.hangman team`", value="**Team vs Team**. Chaos in the main channel! Talk openly and bluff, but only the *Designated Guesser* can actually type the answer!", inline=False)
             embed.add_field(name="💡 Hints & Hero Guesses", value="Type `?guess [word]` to instantly solve it (Fails cost 2 Lives!).\nType `?hint` or `?cat` at the cost of **1 Life** to get a clue.", inline=False)
             
         elif selection == "Word Management":

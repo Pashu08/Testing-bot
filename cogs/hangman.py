@@ -167,19 +167,10 @@ class Hangman(commands.Cog):
             mid = max(1, len(players) // 2)
             team_red, team_blue = players[:mid], players[mid:]
             
-            team_embed = discord.Embed(title="🚀 TEAMS LOCKED!", description="Setting up War Rooms...", color=discord.Color.green())
+            team_embed = discord.Embed(title="🚀 TEAMS LOCKED!", description="Setting up...", color=discord.Color.green())
             team_embed.add_field(name="🍎 Team Red", value=", ".join([p.display_name for p in team_red]), inline=False)
             team_embed.add_field(name="🫐 Team Blue", value=", ".join([p.display_name for p in team_blue]), inline=False)
             await ctx.send(embed=team_embed)
-            
-            try:
-                thread_red = await ctx.channel.create_thread(name="🍎 Team Red Strategy", type=discord.ChannelType.private_thread)
-                for p in team_red: await thread_red.add_user(p)
-                thread_blue = await ctx.channel.create_thread(name="🫐 Team Blue Strategy", type=discord.ChannelType.private_thread)
-                for p in team_blue: await thread_blue.add_user(p)
-            except Exception:
-                self.duel_hosts.pop(ctx.channel.id, None)
-                return await ctx.send(embed=discord.Embed(title="❌ CRASH", description="The bot lacks the 'Create Private Threads' permission!", color=discord.Color.red()))
 
             red_cap, blue_cap = team_red[0], team_blue[0]
             await ctx.send(embed=discord.Embed(title="📱 Draft Phase", description=f"{red_cap.mention} and {blue_cap.mention}, check your DMs! You have 60s to draft words.", color=discord.Color.gold()))
@@ -255,7 +246,6 @@ class Hangman(commands.Cog):
                             ts["wrong"] += 1
                             await ctx.send(embed=discord.Embed(description="❌ **Wrong Letter!**", color=discord.Color.red()), delete_after=3)
                             
-                    # Update board visually BEFORE death/win announcement
                     display = get_display(ts["word"], ts["guessed"])
                     g_str = ", ".join(ts["guessed"]) if ts["guessed"] else "None"
                     pic_idx = min(ts["wrong"], 6)
@@ -275,7 +265,6 @@ class Hangman(commands.Cog):
                 except asyncio.TimeoutError:
                     ts["wrong"] += 1
                     
-                    # Update board for AFK timeout
                     display = get_display(ts["word"], ts["guessed"])
                     g_str = ", ".join(ts["guessed"]) if ts["guessed"] else "None"
                     pic_idx = min(ts["wrong"], 6)
@@ -299,10 +288,6 @@ class Hangman(commands.Cog):
             self.duel_players.pop(ctx.channel.id, None)
             self.duel_hosts.pop(ctx.channel.id, None)
             try: await board_msg.delete()
-            except: pass
-            try: await thread_red.delete()
-            except: pass
-            try: await thread_blue.delete()
             except: pass
             return
 
@@ -422,7 +407,6 @@ class Hangman(commands.Cog):
                             state["status"] = "won"
                             await ctx.send(embed=discord.Embed(title="🏆 HERO GUESS SUCCESS!", description=f"**{p.display_name}** correctly guessed **{state['word'].title()}**!", color=discord.Color.green()))
                             
-                            # Final update before moving on
                             display = get_display(state["word"], state["guessed"])
                             g_str = ", ".join(state["guessed"]) if state["guessed"] else "None"
                             pic_idx = min(state["wrong"], 6)
@@ -445,7 +429,6 @@ class Hangman(commands.Cog):
                             state["wrong"] += 1
                             await ctx.send(embed=discord.Embed(description=f"❌ **Wrong!** {p.display_name} passes the controller!", color=discord.Color.red()), delete_after=3)
                             
-                    # Update board visually BEFORE death announcement
                     display = get_display(state["word"], state["guessed"])
                     g_str = ", ".join(state["guessed"]) if state["guessed"] else "None"
                     pic_idx = min(state["wrong"], 6)
@@ -469,7 +452,6 @@ class Hangman(commands.Cog):
                 except asyncio.TimeoutError:
                     state["status"] = "lost"
                     
-                    # Update board for AFK timeout
                     display = get_display(state["word"], state["guessed"])
                     g_str = ", ".join(state["guessed"]) if state["guessed"] else "None"
                     state["wrong"] += 1
@@ -531,7 +513,6 @@ class Hangman(commands.Cog):
                 elif guess.startswith("?guess "):
                     hero_guess = guess[7:].strip()
                     if hero_guess == word:
-                        # Final board update before winning
                         display = get_display(word, guessed_letters)
                         g_str = ", ".join(guessed_letters) if guessed_letters else "None"
                         pic_idx = min(wrong_guesses, 6)
@@ -550,7 +531,6 @@ class Hangman(commands.Cog):
                     guessed_letters.append(guess)
                     if guess not in word: wrong_guesses += 1
                 
-                # Update board visually BEFORE death announcement
                 display = get_display(word, guessed_letters)
                 g_str = ", ".join(guessed_letters) if guessed_letters else "None"
                 pic_idx = min(wrong_guesses, 6)
@@ -561,8 +541,6 @@ class Hangman(commands.Cog):
                 if r"\_" not in display: 
                     return await ctx.send(embed=discord.Embed(title="🎉 YOU SURVIVED!", description=f"The word was **{word.title()}**.", color=discord.Color.green()))
             except asyncio.TimeoutError:
-                
-                # Final board update for AFK timeout
                 display = get_display(word, guessed_letters)
                 g_str = ", ".join(guessed_letters) if guessed_letters else "None"
                 wrong_guesses += 1
