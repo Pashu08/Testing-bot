@@ -28,25 +28,26 @@ class HelpDropdown(discord.ui.Select):
         
         if selection == "Playing the Game":
             embed = discord.Embed(title="🎮 Playing the Game", color=discord.Color.blue())
-            embed.add_field(name="`.hangman [category]`", value="Play a standard **Solo** game. You have 90 seconds per guess.", inline=False)
-            embed.add_field(name="`.hangman duel`", value="**Hot Seat Multiplayer**. The bot DMs everyone to draft words for each other. Miss a letter, and your turn passes!", inline=False)
-            embed.add_field(name="`.hangman team`", value="**Team vs Team**. Chaos in the main channel! Talk openly and bluff, but only the *Designated Guesser* can actually type the answer!", inline=False)
+            embed.add_field(name="`,hangman [category]`", value="Play a standard **Solo** game. You have 90 seconds per guess.", inline=False)
+            embed.add_field(name="`,hangman duel`", value="**Hot Seat Multiplayer**. The bot DMs everyone to draft words for each other. Miss a letter, and your turn passes!", inline=False)
+            embed.add_field(name="`,hangman team`", value="**Team vs Team**. Chaos in the main channel! Talk openly and bluff, but only the *Designated Guesser* can actually type the answer!", inline=False)
             embed.add_field(name="💡 Hints & Hero Guesses", value="Type `?guess [word]` to instantly solve it (Fails cost 2 Lives!).\nType `?hint` or `?cat` at the cost of **1 Life** to get a clue.", inline=False)
             
         elif selection == "Word Management":
             embed = discord.Embed(title="📚 Word Management", color=discord.Color.green())
-            embed.add_field(name="`.categories`", value="Shows all word categories in this server.", inline=False)
-            embed.add_field(name="`.addword [category] [word]`", value="Adds a single word to a category.", inline=False)
-            embed.add_field(name="`.addwords [category] [word1], [word2]`", value="Mass add words separated by commas.", inline=False)
+            embed.add_field(name="`,categories`", value="Shows all word categories in this server.", inline=False)
+            embed.add_field(name="`,addword [category] [word]`", value="Adds a single word to a category.", inline=False)
+            embed.add_field(name="`,addwords [category] [word1], [word2]`", value="Mass add words separated by commas.", inline=False)
             
         elif selection == "Admin & Mods":
             embed = discord.Embed(title="🛡️ Admin & Mods", color=discord.Color.red())
-            embed.add_field(name="`.rencat [old_name] [new_name]`", value="Renames an existing category.", inline=False)
-            embed.add_field(name="`.delword [category] [word]`", value="Deletes a word.", inline=False)
-            embed.add_field(name="`.wordlist [category]`", value="Shows the full list of words in a category.", inline=False)
-            embed.add_field(name="`.hkick @user`", value="Kicks a player from an active lobby. (Host/Bot Mod only)", inline=False)
-            embed.add_field(name="`.addmod @user` / `.delmod @user`", value="Gives a user permission to delete words, rename categories, and kick players.", inline=False)
-            embed.add_field(name="`.modlist`", value="See who the current Bot Admins are.", inline=False)
+            embed.add_field(name="`,purge [number]`", value="Deletes up to 100 messages at once.", inline=False)
+            embed.add_field(name="`,rencat [old_name] [new_name]`", value="Renames an existing category.", inline=False)
+            embed.add_field(name="`,delword [category] [word]`", value="Deletes a word.", inline=False)
+            embed.add_field(name="`,wordlist [category]`", value="Shows the full list of words in a category.", inline=False)
+            embed.add_field(name="`,hkick @user`", value="Kicks a player from an active lobby. (Host/Bot Mod only)", inline=False)
+            embed.add_field(name="`,addmod @user` / `,delmod @user`", value="Gives a user permission to manage words and kick players.", inline=False)
+            embed.add_field(name="`,modlist`", value="See who the current Bot Admins are.", inline=False)
 
         await interaction.response.edit_message(embed=embed, view=self.view)
 
@@ -68,6 +69,20 @@ class General(commands.Cog):
         )
         embed.set_footer(text="Created by Pashu")
         await ctx.send(embed=embed, view=HelpView())
+
+    @commands.command()
+    async def purge(self, ctx, amount: int = 0):
+        if not ctx.author.guild_permissions.manage_messages and ctx.author.id != OWNER_ID:
+            return await ctx.send(embed=discord.Embed(title="❌ Access Denied", description="You need the `Manage Messages` permission to use this.", color=discord.Color.red()))
+            
+        if amount < 1 or amount > 100:
+            return await ctx.send(embed=discord.Embed(title="⚠️ Error", description="Please specify a number between 1 and 100. (e.g. `,purge 10`)", color=discord.Color.orange()), delete_after=3)
+            
+        try:
+            deleted = await ctx.channel.purge(limit=amount + 1)
+            await ctx.send(embed=discord.Embed(title="🧹 Cleaned Up!", description=f"Successfully purged **{len(deleted) - 1}** messages.", color=discord.Color.green()), delete_after=3)
+        except discord.Forbidden:
+            await ctx.send(embed=discord.Embed(title="❌ Missing Permissions", description="I need the `Manage Messages` permission in my Server Settings to do this!", color=discord.Color.red()))
 
     @commands.command()
     async def addmod(self, ctx, member: discord.Member):
