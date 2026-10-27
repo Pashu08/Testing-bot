@@ -54,7 +54,7 @@ class Hangman(commands.Cog):
                 if char == " ": d += "   "
                 elif char in gl: d += f"{char} "
                 else: d += "_ "
-            return d
+            return d.strip()
 
         # ==========================================
         # MULTIPLAYER DRAFT WITH DROPDOWNS
@@ -203,7 +203,8 @@ class Hangman(commands.Cog):
                 g_str = ", ".join(ts["guessed"]) if ts["guessed"] else "None"
                 
                 board_embed = discord.Embed(title=f"{ts['emoji']} {ts['name']}'s Turn!", color=ts["color"])
-                board_embed.description = f"```text\n{HANGMAN_PICS[ts['wrong']]}\n```\n`{display}`\n\n**Guessed:** {g_str}\n\n👉 {guesser.mention}, you are the **Designated Guesser**! Type a letter OR guess the full word (Hero Guess)!"
+                # THE FIX: Merged the display word into the main code block
+                board_embed.description = f"```text\n{HANGMAN_PICS[ts['wrong']]}\n\n{display}\n```\n**Guessed:** {g_str}\n\n👉 {guesser.mention}, you are the **Designated Guesser**! Type a letter OR guess the full word (Hero Guess)!"
                 await board_msg.edit(embed=board_embed)
                 
                 def check_team(m): return m.author == guesser and m.channel == ctx.channel and (m.content.isalpha() or " " in m.content)
@@ -214,14 +215,14 @@ class Hangman(commands.Cog):
                     try: await user_msg.delete()
                     except: pass
                     
-                    if len(guess) > 1: # HERO GUESS
+                    if len(guess) > 1:
                         if guess == ts["word"]:
                             await ctx.send(embed=discord.Embed(title="🏆 HERO GUESS SUCCESS!", description=f"{guesser.display_name} correctly guessed **{ts['word'].title()}**!\n**{ts['name']} WINS THE GAME!**", color=discord.Color.green()))
                             game_over = True
                         else:
                             ts["wrong"] += 2
                             await ctx.send(embed=discord.Embed(title="🚨 HERO GUESS FAILED!", description=f"`{guess}` was wrong. {ts['name']} takes **2 strikes**!", color=discord.Color.red()), delete_after=5)
-                    else: # SINGLE LETTER
+                    else:
                         if guess in ts["guessed"]:
                             await ctx.send(embed=discord.Embed(description=f"⚠️ Your team already guessed `{guess}`!", color=discord.Color.orange()), delete_after=3)
                             continue 
@@ -340,7 +341,8 @@ class Hangman(commands.Cog):
                 g_str = ", ".join(state["guessed"]) if state["guessed"] else "None"
                 
                 b_embed = discord.Embed(title=f"🔥 HOT SEAT: {p.display_name}'s Turn!", color=discord.Color.purple())
-                b_embed.description = f"```text\n{HANGMAN_PICS[state['wrong']]}\n```\n`{display}`\n\n**Guessed:** {g_str}\n\n👉 {p.mention}, type a letter to guess!"
+                # THE FIX: Merged the display word into the main code block
+                b_embed.description = f"```text\n{HANGMAN_PICS[state['wrong']]}\n\n{display}\n```\n**Guessed:** {g_str}\n\n👉 {p.mention}, type a letter to guess!"
                 await board_msg.edit(embed=b_embed)
                 
                 def check_guess_duel(m): return m.author == p and m.channel == ctx.channel and len(m.content) == 1 and m.content.isalpha()
@@ -409,7 +411,8 @@ class Hangman(commands.Cog):
         def check_solo(m): return m.author == ctx.author and m.channel == ctx.channel and len(m.content) == 1 and m.content.isalpha()
         
         solo_embed = discord.Embed(title=f"🎮 Solo Hangman | {category.capitalize()}", color=discord.Color.purple())
-        solo_embed.description = f"```text\n{HANGMAN_PICS[wrong_guesses]}\n```\n`{get_display(word, guessed_letters)}`\n\n*Type a letter! (90s limit)*"
+        # THE FIX: Merged the display word into the main code block
+        solo_embed.description = f"```text\n{HANGMAN_PICS[wrong_guesses]}\n\n{get_display(word, guessed_letters)}\n```\n*Type a letter! (90s limit)*"
         board_msg = await ctx.send(embed=solo_embed)
 
         while wrong_guesses < 6:
@@ -428,7 +431,8 @@ class Hangman(commands.Cog):
                 display = get_display(word, guessed_letters)
                 g_str = ", ".join(guessed_letters) if guessed_letters else "None"
                 
-                solo_embed.description = f"```text\n{HANGMAN_PICS[wrong_guesses]}\n```\n`{display}`\n\n**Guessed:** {g_str}"
+                # THE FIX: Merged the display word into the main code block
+                solo_embed.description = f"```text\n{HANGMAN_PICS[wrong_guesses]}\n\n{display}\n```\n**Guessed:** {g_str}"
                 await board_msg.edit(embed=solo_embed)
                 
                 if "_" not in display: 
