@@ -46,43 +46,75 @@ class Hangman(commands.Cog):
                 else: d += "_ "
             return d
 
+        # ==========================================
+        # MULTIPLAYER DRAFT WITH DROPDOWNS
+        # ==========================================
         async def draft_for_player(p, drafting_for="someone else"):
             try:
                 dm = await p.create_dm()
-                await dm.send(f"⚔️ **THE DRAFT** ⚔️\nYou are picking a word for **{drafting_for}**!\nReply with a category name from the database.")
-                def check_msg(m): return m.author == p and m.channel == dm
-                try:
-                    cat_msg = await self.bot.wait_for('message', check=check_msg, timeout=60.0)
-                    cat = cat_msg.content.lower()
-                except asyncio.TimeoutError:
-                    cat = random.choice(list(server_words.keys()))
-                    await dm.send(f"⏳ Time's up! Auto-picked category: `{cat}`")
-                    
-                if cat not in server_words or not server_words[cat]:
-                    cat = random.choice(list(server_words.keys()))
-                    await dm.send(f"⚠️ Invalid category! Auto-picked: `{cat}`")
-                    
-                cat_words = server_words[cat]
-                sample_size = min(5, len(cat_words))
+                
+                # 1. CATEGORY DROPDOWN UI
+                class CategorySelect(discord.ui.Select):
+                    def __init__(self, cats):
+                        options = [discord.SelectOption(label=c.capitalize(), value=c) for c in cats[:25]]
+                        super().__init__(placeholder="Choose a category...", min_values=1, max_values=1, options=options)
+                    async def callback(self, interaction: discord.Interaction):
+                        self.view.cat_choice = self.values[0]
+                        self.disabled = True
+                        await interaction.response.edit_message(content=f"✅ Selected Category: **{self.values[0].capitalize()}**", view=self.view)
+                        self.view.stop()
+
+                class CategoryView(discord.ui.View):
+                    def __init__(self, cats):
+                        super().__init__(timeout=60.0)
+                        self.cat_choice = None
+                        self.add_item(CategorySelect(cats))
+                
+                cats = list(server_words.keys())
+                cat_view = CategoryView(cats)
+                
+                cat_msg = await dm.send(f"⚔️ **THE DRAFT** ⚔️\nYou are picking a word for **{drafting_for}**!", view=cat_view)
+                await cat_view.wait()
+                
+                if cat_view.cat_choice is None:
+                    chosen_cat = random.choice(cats)
+                    await cat_msg.edit(content=f"⏳ Time's up! Auto-picked category: `{chosen_cat}`", view=None)
+                else:
+                    chosen_cat = cat_view.cat_choice
+
+                # 2. WORD DROPDOWN UI
+                cat_words = server_words[chosen_cat]
+                sample_size = min(25, len(cat_words))
                 choices = random.sample(cat_words, sample_size)
-                
-                choices_text = "\n".join([f"**{i+1}**. {w}" for i, w in enumerate(choices)])
-                await dm.send(f"Now, reply with the **number** of the hardest word (1-{sample_size}):\n\n{choices_text}")
-                
-                def check_num(m): return m.author == p and m.channel == dm and m.content.isdigit()
-                try:
-                    num_msg = await self.bot.wait_for('message', check=check_num, timeout=60.0)
-                    idx = int(num_msg.content) - 1
-                    if 0 <= idx < sample_size:
-                        chosen = choices[idx]
-                        await dm.send(f"✅ Locked in: **{chosen}**. Head back to the server!")
-                    else:
-                        chosen = random.choice(choices)
-                        await dm.send(f"⚠️ Invalid number! Auto-picked: **{chosen}**. Head back!")
-                except asyncio.TimeoutError:
-                    chosen = random.choice(choices)
-                    await dm.send(f"⏳ Time's up! Auto-picked: **{chosen}**. Head back!")
-                return chosen
+
+                class WordSelect(discord.ui.Select):
+                    def __init__(self, words):
+                        options = [discord.SelectOption(label=w, value=w) for w in words]
+                        super().__init__(placeholder="Choose the hardest word...", min_values=1, max_values=1, options=options)
+                    async def callback(self, interaction: discord.Interaction):
+                        self.view.word_choice = self.values[0]
+                        self.disabled = True
+                        await interaction.response.edit_message(content=f"✅ Locked in: **{self.values[0]}**. Head back to the server!", view=self.view)
+                        self.view.stop()
+
+                class WordView(discord.ui.View):
+                    def __init__(self, words):
+                        super().__init__(timeout=60.0)
+                        self.word_choice = None
+                        self.add_item(WordSelect(words))
+
+                word_view = WordView(choices)
+                word_msg = await dm.send("Now, select the exact word they have to guess:", view=word_view)
+                await word_view.wait()
+
+                if word_view.word_choice is None:
+                    chosen_word = random.choice(choices)
+                    await word_msg.edit(content=f"⏳ Time's up! Auto-picked: **{chosen_word}**. Head back to the server!", view=None)
+                else:
+                    chosen_word = word_view.word_choice
+                    
+                return chosen_word
+
             except discord.Forbidden:
                 await ctx.send(f"⚠️ {p.mention}, your DMs are locked! Auto-picking a word.")
                 return random.choice(server_words[random.choice(list(server_words.keys()))])
