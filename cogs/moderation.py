@@ -1,13 +1,14 @@
 # cogs/moderation.py
 import discord
 from discord.ext import commands
+from collections import deque
 
 OWNER_ID = 756012403291848804
 
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # This dictionary caches the last deleted message per channel
+        # Cache up to 15 deleted messages per channel using a memory-safe deque
         self.snipes = {}
 
     # ==========================
@@ -15,26 +16,60 @@ class Moderation(commands.Cog):
     # ==========================
     @commands.Cog.listener()
     async def on_message_delete(self, message):
-        # We ignore bot deletions so it only snipes real humans
         if message.author.bot:
             return
+            
+        if message.channel.id not in self.snipes:
+            self.snipes[message.channel.id] = deque(maxlen=15)
+            
+        # Strip out raw image links instead of saving physical attachments
+        attachment_urls = [attachment.url for attachment in message.attachments]
         
-        # Save the deleted message to the channel's ID cache
-        self.snipes[message.channel.id] = message
+        # Save only the raw text data to prevent Termux memory bloat
+        snipe_data = {
+            "author_name": message.author.display_name,
+            "author_avatar": message.author.display_avatar.url,
+            "content": message.content,
+            "attachments": attachment_urls,
+            "created_at": message.created_at
+        }
+        
+        self.snipes[message.channel.id].append(snipe_data)
 
     @commands.command()
-    async def snipe(self, ctx):
-        message = self.snipes.get(ctx.channel.id)
-        
-        if not message:
-            return await ctx.send(embed=discord.Embed(title="🔫 Nothing to Snipe!", description="No recently deleted messages found in this channel.", color=discord.Color.red()))
+    async def snipe(self, ctx, index: int = 1):
+        # 1. Instantly delete the user's snipe command to hide the evidence
+        try:
+            await ctx.message.delete()
+        except discord.Forbidden:
+            pass
             
-        embed = discord.Embed(description=message.content, color=discord.Color.purple())
-        embed.set_author(name=message.author.display_name, icon_url=message.author.display_avatar.url)
-        embed.set_footer(text="Sniped by " + ctx.author.display_name)
-        embed.timestamp = message.created_at
+        channel_snipes = self.snipes.get(ctx.channel.id)
         
-        await ctx.send(embed=embed)
+        if not channel_snipes:
+            return await ctx.send(embed=discord.Embed(title="🔫 Nothing to Snipe!", description="No recently deleted messages found here.", color=discord.Color.red()), delete_after=5)
+            
+        if index < 1 or index > len(channel_snipes):
+            return await ctx.send(embed=discord.Embed(title="⚠️ Error", description=f"Please choose a number between 1 and {len(channel_snipes)}.", color=discord.Color.orange()), delete_after=5)
+            
+        # Index 1 is the most recent (last in list), Index 2 is second most recent, etc.
+        snipe = channel_snipes[-index]
+        
+        content = snipe["content"]
+        if snipe["attachments"]:
+            links = "\n".join(snipe["attachments"])
+            content += f"\n\n🔗 **Attachments:**\n{links}"
+            
+        if not content.strip():
+            content = "*[No text content]*"
+
+        embed = discord.Embed(description=content, color=discord.Color.purple())
+        embed.set_author(name=snipe["author_name"], icon_url=snipe["author_avatar"])
+        embed.set_footer(text=f"Sniped by {ctx.author.display_name} • Self-destructing in 15s")
+        embed.timestamp = snipe["created_at"]
+        
+        # 2. Send the snipe and auto-delete it after 15 seconds
+        await ctx.send(embed=embed, delete_after=15)
 
     # ==========================
     # PURGE SYSTEM
@@ -47,16 +82,13 @@ class Moderation(commands.Cog):
         if amount < 1 or amount > 100:
             return await ctx.send(embed=discord.Embed(title="⚠️ Error", description="Specify a number between 1 and 100. (e.g. `,purge 10` or `,purge 10 @user`)", color=discord.Color.orange()), delete_after=5)
             
-        # This function checks if a message belongs to the pinged user (if one was provided)
         def check(m):
             return m.author == member if member else True
             
         try:
-            # If targeting a specific user, we search up to 100 messages back to find their specific messages
             search_limit = 100 if member else amount + 1
             deleted = await ctx.channel.purge(limit=search_limit, check=check)
             
-            # Clean up the command message itself if we used a targeted filter
             if member:
                 try: await ctx.message.delete()
                 except: pass
@@ -67,7 +99,7 @@ class Moderation(commands.Cog):
             await ctx.send(embed=discord.Embed(title="🧹 Cleaned Up!", description=f"Successfully purged **{actual_deleted}** messages{target_text}.", color=discord.Color.green()), delete_after=4)
             
         except discord.Forbidden:
-            await ctx.send(embed=discord.Embed(title="❌ Missing Permissions", description="I need the `Manage Messages` permission in my Server Settings to do this!", color=discord.Color.red()))
+            await ctx.send(embed=discord.Embed(title="❌ Missing Permissions", description="I need the `Manage Messages` permission in my Server Settings to do this!", color=discord.Color.red()), delete_after=5)
 
 async def setup(bot):
     await bot.add_cog(Moderation(bot))
