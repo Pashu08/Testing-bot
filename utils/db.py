@@ -2,23 +2,26 @@
 import json
 import os
 
-DB_FILE = 'database.json'
+DB_FILE = "database.json"
 
 def load_db():
-    # If no database exists, create an empty one
     if not os.path.exists(DB_FILE):
-        with open(DB_FILE, 'w') as f:
-            json.dump({}, f, indent=4)
+        return {}
     try:
-        with open(DB_FILE, 'r') as f:
+        with open(DB_FILE, "r") as f:
             return json.load(f)
-    except Exception as e:
-        print(f"❌ Database Read Error: {e}")
+    except json.JSONDecodeError:
         return {}
 
 def save_db(data):
-    try:
-        with open(DB_FILE, 'w') as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        print(f"❌ Database Save Error: {e}")
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def init_guild(data, guild_id):
+    if guild_id not in data:
+        data[guild_id] = {"words": {}, "mods": []}
+    if "mods" not in data[guild_id]:
+        data[guild_id]["mods"] = []
+    if "words" not in data[guild_id]:
+        data[guild_id]["words"] = {}
+    return data
