@@ -7,6 +7,7 @@ class HelpDropdown(discord.ui.Select):
         options = [
             discord.SelectOption(label="Playing the Game", description="Learn how to play Solo, Duel, and Team.", emoji="🎮"),
             discord.SelectOption(label="Word Management", description="Commands for adding and checking words.", emoji="📚"),
+            discord.SelectOption(label="Chat Tools", description="Advanced message sniping and chat clearing.", emoji="🛠️"),
             discord.SelectOption(label="Admin & Mods", description="How to manage games and bot admins.", emoji="🛡️")
         ]
         super().__init__(placeholder="Select a category to explore...", min_values=1, max_values=1, options=options)
@@ -27,12 +28,18 @@ class HelpDropdown(discord.ui.Select):
             embed.add_field(name="`,addword [category] [word]`", value="Adds a single word to a category.", inline=False)
             embed.add_field(name="`,addwords [category] [word1], [word2]`", value="Mass add words separated by commas.", inline=False)
             
+        elif selection == "Chat Tools":
+            embed = discord.Embed(title="🛠️ Chat Tools", color=discord.Color.gold())
+            embed.add_field(name="`,snipe`", value="Catch the most recently deleted message.", inline=False)
+            embed.add_field(name="`,snipe list`", value="Show a quick log of the last 15 deleted messages.", inline=False)
+            embed.add_field(name="`,snipe [1-15]`", value="Pull a specific older message from the cache.", inline=False)
+            embed.add_field(name="`,purge [number] [@user]`", value="Wipes chat history. Target a user to only wipe their messages.", inline=False)
+            
         elif selection == "Admin & Mods":
             embed = discord.Embed(title="🛡️ Admin & Mods", color=discord.Color.red())
-            embed.add_field(name="`,purge [number] [@user]`", value="Deletes messages. Target a user to only wipe their chat.", inline=False)
-            embed.add_field(name="`,snipe`", value="Catch the last deleted message in the channel.", inline=False)
             embed.add_field(name="`,hkick @user`", value="Kicks a player from an active lobby.", inline=False)
             embed.add_field(name="`,addmod` / `,delmod`", value="Manage custom Bot Admins.", inline=False)
+            embed.add_field(name="`,modlist`", value="See the current list of Bot Admins.", inline=False)
 
         await interaction.response.edit_message(embed=embed, view=self.view)
 
