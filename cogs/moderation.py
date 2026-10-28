@@ -8,7 +8,6 @@ OWNER_ID = 756012403291848804
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # Cache up to 15 deleted messages per channel using a memory-safe deque
         self.snipes = {}
 
     # ==========================
@@ -16,17 +15,14 @@ class Moderation(commands.Cog):
     # ==========================
     @commands.Cog.listener()
     async def on_message_delete(self, message):
-        # Ignore bot messages AND ignore commands so it doesn't snipe your own ',snipe'
         if message.author.bot or message.content.startswith(','):
             return
             
         if message.channel.id not in self.snipes:
             self.snipes[message.channel.id] = deque(maxlen=15)
             
-        # Strip out raw image links instead of saving physical attachments
         attachment_urls = [attachment.url for attachment in message.attachments]
         
-        # Save only the raw text data to prevent Termux memory bloat
         snipe_data = {
             "author_name": message.author.display_name,
             "author_avatar": message.author.display_avatar.url,
@@ -39,7 +35,10 @@ class Moderation(commands.Cog):
 
     @commands.command()
     async def snipe(self, ctx, arg: str = "1"):
-        # 1. Instantly delete the user's snipe command to hide the evidence
+        # Permission Lock: Mods and Owner Only
+        if not ctx.author.guild_permissions.manage_messages and ctx.author.id != OWNER_ID:
+            return await ctx.send(embed=discord.Embed(title="❌ Access Denied", description="You need the `Manage Messages` permission to use this.", color=discord.Color.red()), delete_after=5)
+
         try:
             await ctx.message.delete()
         except discord.Forbidden:
@@ -52,7 +51,6 @@ class Moderation(commands.Cog):
             
         total_snipes = len(channel_snipes)
 
-        # Show a summary log of all cached messages at once
         if arg.lower() in ["list", "all"]:
             description = ""
             for i, snipe in enumerate(reversed(channel_snipes), 1):
@@ -65,7 +63,6 @@ class Moderation(commands.Cog):
             embed.set_footer(text=f"Requested by {ctx.author.display_name} • Self-destructing in 20s")
             return await ctx.send(embed=embed, delete_after=20)
             
-        # Error handling if they type something weird like ',snipe yuyu'
         if not arg.isdigit():
             return await ctx.send(embed=discord.Embed(title="⚠️ Error", description="Use `,snipe` for the newest, `,snipe 3` for a specific one, or `,snipe list` for the full log.", color=discord.Color.orange()), delete_after=5)
             
@@ -73,7 +70,6 @@ class Moderation(commands.Cog):
         if index < 1 or index > total_snipes:
             return await ctx.send(embed=discord.Embed(title="⚠️ Error", description=f"I only have **{total_snipes}** deleted message(s). Pick a number between 1 and {total_snipes}.", color=discord.Color.orange()), delete_after=5)
             
-        # Index 1 is the most recent (last in list), Index 2 is second most recent, etc.
         snipe = channel_snipes[-index]
         
         content = snipe["content"]
@@ -89,7 +85,6 @@ class Moderation(commands.Cog):
         embed.set_footer(text=f"Sniped by {ctx.author.display_name} • [Msg {index}/{total_snipes}] • Self-destructing in 15s")
         embed.timestamp = snipe["created_at"]
         
-        # 2. Send the snipe and auto-delete it after 15 seconds
         await ctx.send(embed=embed, delete_after=15)
 
     # ==========================
