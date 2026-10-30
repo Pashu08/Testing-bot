@@ -69,7 +69,12 @@ class ImposterGame(commands.Cog):
         if not view.started: return await ctx.send("Lobby cancelled or timed out.")
 
         players = view.players
-        innocent_word, imposter_word = random.choice(guild_pairs)
+        
+        # Shuffle the chosen pair so the Imposter word is completely random
+        chosen_pair = list(random.choice(guild_pairs))
+        random.shuffle(chosen_pair)
+        innocent_word, imposter_word = chosen_pair[0], chosen_pair[1]
+        
         imposter_player = random.choice(players)
         
         for p in players:

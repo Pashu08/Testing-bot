@@ -23,7 +23,6 @@ class ImposterAdmin(commands.Cog):
         if not is_admin(ctx):
             return await ctx.send(embed=discord.Embed(title="❌ Access Denied", description="Only Admins can add word pairs.", color=discord.Color.red()))
 
-        # Split the input by comma
         if "," not in words:
             return await ctx.send(embed=discord.Embed(title="⚠️ Invalid Format", description="Use a comma to separate words!\nExample: `,addpair hospital, school`", color=discord.Color.orange()))
 
@@ -31,43 +30,41 @@ class ImposterAdmin(commands.Cog):
         if len(parts) != 2:
             return await ctx.send(embed=discord.Embed(title="⚠️ Invalid Format", description="Please provide exactly two words separated by one comma.", color=discord.Color.orange()))
 
-        innocent_word = parts[0].strip().lower()
-        imposter_word = parts[1].strip().lower()
+        word1 = parts[0].strip().lower()
+        word2 = parts[1].strip().lower()
         guild_id = str(ctx.guild.id)
 
         data = load_imposter_db()
         data = init_guild(data, guild_id)
 
-        # Check for duplicates
-        new_pair = [innocent_word, imposter_word]
-        if new_pair in data[guild_id]["pairs"] or [imposter_word, innocent_word] in data[guild_id]["pairs"]:
-            return await ctx.send(embed=discord.Embed(title="⚠️ Duplicate", description=f"The pair `{innocent_word}` & `{imposter_word}` already exists!", color=discord.Color.orange()))
+        new_pair = [word1, word2]
+        if new_pair in data[guild_id]["pairs"] or [word2, word1] in data[guild_id]["pairs"]:
+            return await ctx.send(embed=discord.Embed(title="⚠️ Duplicate", description=f"The pair `{word1}` & `{word2}` already exists!", color=discord.Color.orange()))
 
-        # Add and save
         data[guild_id]["pairs"].append(new_pair)
         save_imposter_db(data)
 
-        embed = discord.Embed(title="✅ Pair Added", description=f"**Innocents:** `{innocent_word}`\n**Imposter:** `{imposter_word}`", color=discord.Color.green())
+        embed = discord.Embed(title="✅ Secret Pair Added", description=f"**Linked Words:** `{word1}` ↔️ `{word2}`", color=discord.Color.green())
+        embed.set_footer(text="Roles are hidden to prevent cheating.")
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def delpair(self, ctx, *, innocent_word: str):
+    async def delpair(self, ctx, *, word: str):
         if not is_admin(ctx):
             return await ctx.send(embed=discord.Embed(title="❌ Access Denied", color=discord.Color.red()))
 
-        innocent_word = innocent_word.strip().lower()
+        word = word.strip().lower()
         guild_id = str(ctx.guild.id)
         data = load_imposter_db()
         data = init_guild(data, guild_id)
 
-        # Search and remove the pair
         for pair in data[guild_id]["pairs"]:
-            if pair[0] == innocent_word or pair[1] == innocent_word:
+            if pair[0] == word or pair[1] == word:
                 data[guild_id]["pairs"].remove(pair)
                 save_imposter_db(data)
-                return await ctx.send(embed=discord.Embed(title="🗑️ Pair Deleted", description=f"Deleted the pair containing `{innocent_word}`.", color=discord.Color.green()))
+                return await ctx.send(embed=discord.Embed(title="🗑️ Pair Deleted", description=f"Deleted the pair containing `{word}`.", color=discord.Color.green()))
 
-        await ctx.send(embed=discord.Embed(title="❌ Error", description=f"Could not find a pair containing `{innocent_word}`.", color=discord.Color.red()))
+        await ctx.send(embed=discord.Embed(title="❌ Error", description=f"Could not find a pair containing `{word}`.", color=discord.Color.red()))
 
     @commands.command()
     async def pairs(self, ctx):
